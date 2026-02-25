@@ -237,20 +237,18 @@ function App() {
 
       document.body.removeChild(wrapper);
 
-      const { jsPDF } = window.jspdf;
       const imgData = canvas.toDataURL("image/png");
       const imgW = 210;
       const imgH = (canvas.height * imgW) / canvas.width;
       const fname = `月次報告書_${data.school||"学校名"}_${data.month||"月"}`;
       
       if (exportMode === "png") {
-        // PNG download
         const link = document.createElement("a");
         link.download = fname + ".png";
         link.href = imgData;
         link.click();
       } else {
-        // PDF - A4 fixed
+        const { jsPDF } = window.jspdf;
         const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
         if (imgH > 297) {
           pdf.addImage(imgData, "PNG", 0, 0, imgW, 297);
@@ -259,10 +257,8 @@ function App() {
         }
         pdf.save(fname + ".pdf");
       }
-      pdf.save(`月次報告書_${data.school||"学校名"}_${data.month||"月"}.pdf`);
     } catch (err) {
       console.error(err);
-      alert("PDF生成エラーが発生しました。");
     }
     setGenerating(false);
   };
