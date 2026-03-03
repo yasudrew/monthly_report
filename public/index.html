@@ -27,7 +27,7 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState } = React;
+const { useState, useEffect } = React;
 
 const activityOptions = [
   "定例会議", "カリキュラム設計", "授業参観・フィードバック",
@@ -40,12 +40,6 @@ const phaseOptions = [
   "T3運用_Ph4PGM評価", "T3運用_Ph5カリ修正",
 ];
 const cdnMembers = ["金公希", "渋谷吉孝", "正木早紀", "島川竜也", "小川顕太郎", "長橋博史"];
-const monthOptions = (() => {
-  const o = [];
-  for (let y = 2025; y <= 2027; y++) for (let m = 1; m <= 12; m++) o.push(`${y}年${m}月度`);
-  return o;
-})();
-
 const IS = { width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" };
 const SS = { ...IS, cursor: "pointer", background: "white" };
 const TS = { ...IS, resize: "vertical", lineHeight: 1.7 };
@@ -206,7 +200,40 @@ function App() {
   });
   const [tab, setTab] = useState("edit");
   const [generating, setGenerating] = useState(false);
-  const [exportMode, setExportMode] = useState("png"); // "png" or "pdf"
+  const [exportMode, setExportMode] = useState("png");
+  const [notionLoading, setNotionLoading] = useState(false);
+  const [notionLoaded, setNotionLoaded] = useState(false);
+  const [notionError, setNotionError] = useState("");
+
+  // Auto-fetch from Notion if ?pageId= is in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const pageId = params.get("pageId");
+    if (!pageId) return;
+    
+    setNotionLoading(true);
+    fetch(`/api/notion?pageId=${pageId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) { setNotionError(d.error); return; }
+        setData(prev => ({
+          ...prev,
+          school: d.school || "",
+          month: d.month || "",
+          cdn: d.cdn || [],
+          phase: d.phase || "",
+          activities: d.activities || [],
+          deliverables: d.deliverables || "",
+          summary: d.summary || "",
+          teacherComment: d.teacherComment || "",
+          nextMonth: d.nextMonth || "",
+          notes: d.notes || "",
+        }));
+        setNotionLoaded(true);
+      })
+      .catch(e => setNotionError(e.message))
+      .finally(() => setNotionLoading(false));
+  }, []);
 
   const upd = (key) => (e) => setData(prev => ({ ...prev, [key]: e.target.value }));
   const toggleAct = (act) => setData(prev => ({ ...prev, activities: prev.activities.includes(act) ? prev.activities.filter(a => a !== act) : [...prev.activities, act] }));
@@ -284,13 +311,24 @@ function App() {
       </div>
 
       <div className="app-container" style={{ maxWidth: 700, margin: "0 auto", padding: 16 }}>
+        {/* Notion status */}
+        {notionLoading && (
+          <div style={{ background: "#eff6ff", borderRadius: 8, padding: "10px 16px", marginBottom: 10, fontSize: 12, color: "#1e40af", display: "flex", alignItems: "center", gap: 8 }}>⏳ Notionからデータを取得中...</div>
+        )}
+        {notionLoaded && (
+          <div style={{ background: "#f0fdf4", borderRadius: 8, padding: "10px 16px", marginBottom: 10, fontSize: 12, color: "#166534", display: "flex", alignItems: "center", gap: 8 }}>✅ Notionからデータを取得しました。内容を確認して出力してください。</div>
+        )}
+        {notionError && (
+          <div style={{ background: "#fef2f2", borderRadius: 8, padding: "10px 16px", marginBottom: 10, fontSize: 12, color: "#991b1b" }}>❌ 取得エラー: {notionError}</div>
+        )}
+
         {/* Edit tab */}
         {tab === "edit" && (
           <div className="no-print" style={{ background: "white", borderRadius: 10, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", marginBottom: 10, paddingBottom: 8, borderBottom: "1px solid #e2e8f0" }}>基本情報</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
               <div><label style={LB}>学校名（顧客名）</label><input style={IS} value={data.school} onChange={upd("school")} placeholder="例：麗澤瑞浪" /></div>
-              <div><label style={LB}>対象月</label><select style={SS} value={data.month} onChange={upd("month")}><option value="">選択してください</option>{monthOptions.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
+              <div><label style={LB}>対象月</label><input style={IS} value={data.month} onChange={upd("month")} placeholder="例：2月度" /></div>
             </div>
             <div style={{ marginBottom: 10 }}>
               <label style={LB}>CDN担当（複数選択可）</label>
