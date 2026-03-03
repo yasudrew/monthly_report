@@ -12,7 +12,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Noto Sans JP', -apple-system, sans-serif; background: #f1f5f9; }
+  body { font-family: 'Noto Sans JP', -apple-system, sans-serif; background: #fafaf9; }
   @media print {
     body, html { background: white !important; margin: 0 !important; padding: 0 !important; }
     .no-print { display: none !important; }
@@ -21,13 +21,13 @@
     .report-wrap { box-shadow: none !important; border-radius: 0 !important; }
     @page { margin: 0; size: auto; }
   }
-  @media screen { .report-wrap { box-shadow: 0 4px 20px rgba(0,0,0,0.12); } }
+  @media screen { .report-wrap { box-shadow: 0 2px 16px rgba(0,0,0,0.08); border-radius: 12px; overflow: hidden; } }
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState } = React;
+const { useState, useEffect } = React;
 
 const activityOptions = [
   "定例会議", "カリキュラム設計", "授業参観・フィードバック",
@@ -40,20 +40,42 @@ const phaseOptions = [
   "T3運用_Ph4PGM評価", "T3運用_Ph5カリ修正",
 ];
 const cdnMembers = ["金公希", "渋谷吉孝", "正木早紀", "島川竜也", "小川顕太郎", "長橋博史"];
-const monthOptions = (() => {
-  const o = [];
-  for (let y = 2025; y <= 2027; y++) for (let m = 1; m <= 12; m++) o.push(`${y}年${m}月度`);
-  return o;
-})();
 
-const IS = { width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" };
-const SS = { ...IS, cursor: "pointer", background: "white" };
+const IS = { width: "100%", padding: "9px 12px", border: "1px solid #e7e5e4", borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box", background: "#fafaf9" };
+const SS = { ...IS, cursor: "pointer", background: "#fafaf9" };
 const TS = { ...IS, resize: "vertical", lineHeight: 1.7 };
-const LB = { fontSize: 11, fontWeight: 500, color: "#374151", display: "block", marginBottom: 3 };
+const LB = { fontSize: 11, fontWeight: 500, color: "#57534e", display: "block", marginBottom: 4 };
 
-/* ━━━ Report Render (pure HTML, no React state dependency for clone) ━━━ */
+/* MIETA VI */
+const C = {
+  yellow: "#f6e400",
+  gold: "#fec100",
+  gray: "#595757",
+  grayLight: "#78716c",
+  bg: "#fefce8",
+  accent: "#fec100",
+};
+
+/* MIETA+ Logo SVG (proper viewBox) */
+const logoHTML = `<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="16" cy="16" r="10.5" fill="none" stroke="#595757" stroke-width="3"/>
+  <circle cx="32" cy="16" r="8.5" fill="#fec100"/>
+  <text x="24" y="42" text-anchor="middle" font-family="'Noto Sans JP',sans-serif" font-weight="700" font-size="10.5" fill="#595757" letter-spacing="0.5">MIETA<tspan fill="#fec100" font-size="11">+</tspan></text>
+</svg>`;
+
+const logoJSX = (
+  <svg width="48" height="48" viewBox="0 0 48 48">
+    <circle cx="16" cy="16" r="10.5" fill="none" stroke="#595757" strokeWidth="3"/>
+    <circle cx="32" cy="16" r="8.5" fill="#fec100"/>
+    <text x="24" y="42" textAnchor="middle" fontFamily="'Noto Sans JP',sans-serif" fontWeight="700" fontSize="10.5" fill="#595757" letterSpacing="0.5">MIETA<tspan fill="#fec100" fontSize="11">+</tspan></text>
+  </svg>
+);
+
+/* ━━━ Section heading helper (for renderHTML) ━━━ */
+const sectionHead = (label) => `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><div style="background:${C.gold};border-radius:10px;padding:2px 10px;font-size:9px;font-weight:600;color:white">${label}</div><div style="flex:1;height:1px;background:#e7e5e4"></div></div>`;
+
+/* ━━━ Report Render (pure HTML for PDF clone) ━━━ */
 function renderReportHTML(d) {
-  const total = (Number(d.mtgHours)||0) + (Number(d.workHours)||0) + (Number(d.travelHours)||0);
   const delivCount = d.deliverables ? d.deliverables.split(/[、,]/).filter(s=>s.trim()).length : 0;
   const phaseSub = d.phase ? (d.phase.split(/Ph\d/)[1]||"") : "";
   const cdnStr = d.cdn.length > 0 ? d.cdn.join(" / ") : "CDN名";
@@ -62,134 +84,139 @@ function renderReportHTML(d) {
   let photosHTML = "";
   if (hasPhotos) {
     const imgs = [d.photo1, d.photo2].filter(Boolean).map(src =>
-      `<div style="flex:1;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0"><img src="${src}" style="width:100%;height:140px;object-fit:cover;display:block"></div>`
+      `<div style="flex:1;border-radius:10px;overflow:hidden;border:1px solid #e7e5e4;background:#f5f5f4"><img src="${src}" style="width:100%;aspect-ratio:4/3;object-fit:contain;display:block"></div>`
     ).join("");
-    photosHTML = `<div style="display:flex;gap:12px;margin-bottom:18px">${imgs}</div>`;
+    photosHTML = `<div style="display:flex;gap:14px;margin-bottom:20px">${imgs}</div>`;
   }
 
   let summaryHTML = "";
   if (d.summary) {
-    summaryHTML = `<div style="margin-bottom:16px">
-      <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px"><div style="width:3px;height:15px;background:#2563eb;border-radius:2px"></div><div style="font-size:12px;font-weight:600;color:#1e293b">今月の活動サマリー</div></div>
-      <div style="font-size:11px;line-height:1.9;color:#374151">${d.summary}</div>
+    summaryHTML = `<div style="margin-bottom:20px">
+      ${sectionHead("活動サマリー")}
+      <div style="font-size:11px;line-height:2.0;color:#44403c;padding:0 4px">${d.summary}</div>
     </div>`;
   }
 
   let teacherHTML = "";
   if (d.teacherComment) {
-    teacherHTML = `<div style="margin-bottom:16px">
-      <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px"><div style="width:3px;height:15px;background:#2563eb;border-radius:2px"></div><div style="font-size:12px;font-weight:600;color:#1e293b">先生の声</div></div>
-      <div style="background:#f0f9ff;border-radius:8px;padding:12px 16px;font-size:11px;color:#1e40af;font-style:italic;line-height:1.8">「${d.teacherComment}」</div>
+    teacherHTML = `<div style="margin-bottom:20px">
+      ${sectionHead("先生の声")}
+      <div style="background:${C.bg};border-radius:10px;padding:14px 18px;font-size:11px;color:#713f12;font-style:italic;line-height:1.9;border:1px solid #fef08a">「${d.teacherComment}」</div>
     </div>`;
   }
 
   let nextHTML = "";
   if (d.nextMonth) {
-    nextHTML = `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:13px 16px;margin-bottom:16px">
-      <div style="font-size:11px;font-weight:600;color:#92400e;margin-bottom:5px">📅 来月の予定</div>
-      <div style="font-size:11px;color:#78350f;line-height:1.7">${d.nextMonth}</div>
+    nextHTML = `<div style="margin-bottom:20px">
+      ${sectionHead("来月の予定")}
+      <div style="background:#f5f5f4;border-radius:10px;padding:14px 18px;font-size:11px;color:#44403c;line-height:1.8;border:1px solid #e7e5e4">${d.nextMonth}</div>
     </div>`;
   }
 
   let notesHTML = "";
   if (d.notes) {
-    notesHTML = `<div style="margin-bottom:16px">
-      <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px"><div style="width:3px;height:15px;background:#2563eb;border-radius:2px"></div><div style="font-size:12px;font-weight:600;color:#1e293b">備考</div></div>
-      <div style="font-size:11px;color:#374151;line-height:1.8">${d.notes}</div>
+    notesHTML = `<div style="margin-bottom:20px">
+      ${sectionHead("備考")}
+      <div style="font-size:11px;color:#44403c;line-height:1.9;padding:0 4px">${d.notes}</div>
     </div>`;
   }
 
   let tagsHTML = "";
   if (d.activities.length > 0) {
-    const tags = d.activities.map(a => `<span style="font-size:9px;background:#eff6ff;color:#1e40af;padding:2px 8px;border-radius:4px">${a}</span>`).join("");
-    tagsHTML = `<div style="margin-top:8px;padding-top:12px;border-top:1px solid #e2e8f0">
-      <div style="font-size:8px;color:#94a3b8;margin-bottom:4px">実施業務</div>
-      <div style="display:flex;gap:4px;flex-wrap:wrap">${tags}</div>
+    const tags = d.activities.map(a => `<span style="font-size:9px;background:${C.bg};color:#713f12;padding:3px 10px;border-radius:20px;border:1px solid #fef08a">${a}</span>`).join("");
+    tagsHTML = `<div style="padding-top:14px;border-top:1px solid #e7e5e4">
+      <div style="font-size:8px;color:#a8a29e;margin-bottom:6px">実施業務</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${tags}</div>
     </div>`;
   }
 
-  return `<div style="width:794px;background:white;font-family:'Noto Sans JP',sans-serif;overflow:hidden">
-    <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);padding:26px 32px 22px;color:white;display:flex;justify-content:space-between;align-items:flex-start">
-      <div><div style="font-size:8px;letter-spacing:3px;opacity:0.5;margin-bottom:3px">MIETA MONTHLY REPORT</div><div style="font-size:20px;font-weight:700">月次活動レポート</div></div>
-      <div style="text-align:right"><div style="font-size:13px;font-weight:600">${d.school||"学校名"}</div><div style="font-size:11px;opacity:0.8;margin-top:3px">${d.month||"対象月"} ｜ 担当：${cdnStr}</div></div>
+  return `<div style="width:794px;background:white;font-family:'Noto Sans JP',sans-serif;overflow:hidden;border-radius:12px">
+    <div style="background:white;padding:22px 32px 18px;display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid ${C.gold}">
+      <div><div style="font-size:7px;letter-spacing:3px;color:#a8a29e;margin-bottom:4px;text-transform:uppercase">Monthly Activity Report</div><div style="font-size:20px;font-weight:700;color:${C.gray}">月次活動レポート</div></div>
+      <div style="display:flex;align-items:center;gap:20px"><div style="text-align:right"><div style="font-size:14px;font-weight:600;color:${C.gray}">${d.school||"学校名"}</div><div style="font-size:10px;color:#a8a29e;margin-top:4px">${d.month||"対象月"} ｜ 担当：${cdnStr}</div></div>${logoHTML}</div>
     </div>
-    <div style="padding:18px 32px 24px">
-      <div style="display:flex;gap:12px;margin-bottom:18px">
-        <div style="flex:1;background:#eff6ff;border-radius:8px;padding:13px 16px;border-top:3px solid #2563eb"><div style="font-size:8px;color:#6b7280;margin-bottom:5px">現在のフェーズ</div><div style="font-size:17px;font-weight:700;color:#2563eb">${d.phase||"—"}</div><div style="font-size:8px;color:#6b7280;margin-top:3px">${phaseSub}</div></div>
-        <div style="flex:1;background:#ecfdf5;border-radius:8px;padding:13px 16px;border-top:3px solid #059669"><div style="font-size:8px;color:#6b7280;margin-bottom:5px">今月の稼働</div><div style="font-size:17px;font-weight:700;color:#059669">${total?total+"時間":"—"}</div><div style="font-size:8px;color:#6b7280;margin-top:3px">${total?`MTG ${d.mtgHours||0}h / 作業 ${d.workHours||0}h / 移動 ${d.travelHours||0}h`:""}</div></div>
-        <div style="flex:1;background:#fffbeb;border-radius:8px;padding:13px 16px;border-top:3px solid #d97706"><div style="font-size:8px;color:#6b7280;margin-bottom:5px">成果物</div><div style="font-size:17px;font-weight:700;color:#d97706">${delivCount?delivCount+"件":"—"}</div><div style="font-size:8px;color:#6b7280;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.deliverables||""}</div></div>
+    <div style="padding:22px 32px 28px">
+      <div style="display:flex;gap:14px;margin-bottom:22px">
+        <div style="flex:1;background:${C.bg};border-radius:10px;padding:16px 18px;border:1px solid #fef08a"><div style="font-size:8px;color:${C.grayLight};margin-bottom:6px">📋 現在のフェーズ</div><div style="font-size:15px;font-weight:700;color:${C.gray}">${d.phase||"—"}</div><div style="font-size:8px;color:${C.grayLight};margin-top:4px">${phaseSub}</div></div>
+        <div style="flex:1;background:#f5f5f4;border-radius:10px;padding:16px 18px;border:1px solid #e7e5e4"><div style="font-size:8px;color:${C.grayLight};margin-bottom:6px">📦 成果物</div><div style="font-size:15px;font-weight:700;color:${C.gray}">${delivCount?delivCount+"件":"—"}</div><div style="font-size:8px;color:${C.grayLight};margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.deliverables||""}</div></div>
       </div>
       ${photosHTML}${summaryHTML}${teacherHTML}${nextHTML}${notesHTML}${tagsHTML}
     </div>
-    <div style="padding:10px 32px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;font-size:8px;color:#94a3b8"><span>MIETA Monthly Report</span><span>1 / 1</span></div>
+    <div style="padding:10px 32px;border-top:1px solid #e7e5e4;display:flex;justify-content:space-between;font-size:8px;color:#a8a29e"><span>© MIETA Inc.</span><span>Monthly Report ・ 1/1</span></div>
   </div>`;
 }
 
 /* ━━━ Report React Component (for preview) ━━━ */
+const SectionHead = ({label}) => (
+  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+    <div style={{ background: C.gold, borderRadius: 10, padding: "2px 10px", fontSize: 9, fontWeight: 600, color: "white" }}>{label}</div>
+    <div style={{ flex: 1, height: 1, background: "#e7e5e4" }}/>
+  </div>
+);
+
 const ReportPage = ({ d }) => {
-  const total = (Number(d.mtgHours)||0) + (Number(d.workHours)||0) + (Number(d.travelHours)||0);
   const delivCount = d.deliverables ? d.deliverables.split(/[、,]/).filter(s=>s.trim()).length : 0;
   const hasPhotos = d.photo1 || d.photo2;
   const phaseSub = d.phase ? (d.phase.split(/Ph\d/)[1]||"") : "";
 
   return (
     <div id="report-page" style={{ width: "100%", maxWidth: 794, background: "white", position: "relative", overflow: "hidden", fontFamily: "'Noto Sans JP', sans-serif", margin: "0 auto" }}>
-      <div style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)", padding: "26px 32px 22px", color: "white", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div style={{ background: "white", padding: "22px 32px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `3px solid ${C.gold}` }}>
         <div>
-          <div style={{ fontSize: 8, letterSpacing: 3, opacity: 0.5, marginBottom: 3 }}>MIETA MONTHLY REPORT</div>
-          <div style={{ fontSize: 20, fontWeight: 700 }}>月次活動レポート</div>
+          <div style={{ fontSize: 7, letterSpacing: 3, color: "#a8a29e", marginBottom: 4, textTransform: "uppercase" }}>Monthly Activity Report</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: C.gray }}>月次活動レポート</div>
         </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>{d.school || "学校名"}</div>
-          <div style={{ fontSize: 11, opacity: 0.8, marginTop: 3 }}>{d.month || "対象月"} ｜ 担当：{d.cdn.length > 0 ? d.cdn.join(" / ") : "CDN名"}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: C.gray }}>{d.school || "学校名"}</div>
+            <div style={{ fontSize: 10, color: "#a8a29e", marginTop: 4 }}>{d.month || "対象月"} ｜ 担当：{d.cdn.length > 0 ? d.cdn.join(" / ") : "CDN名"}</div>
+          </div>
+          {logoJSX}
         </div>
       </div>
-      <div style={{ padding: "18px 32px 24px" }}>
-        <div style={{ display: "flex", gap: 12, marginBottom: 18 }}>
-          {[
-            { label: "現在のフェーズ", value: d.phase||"—", sub: phaseSub, color: "#2563eb", bg: "#eff6ff" },
-            { label: "今月の稼働", value: total?`${total}時間`:"—", sub: total?`MTG ${d.mtgHours||0}h / 作業 ${d.workHours||0}h / 移動 ${d.travelHours||0}h`:"", color: "#059669", bg: "#ecfdf5" },
-            { label: "成果物", value: delivCount?`${delivCount}件`:"—", sub: d.deliverables||"", color: "#d97706", bg: "#fffbeb" },
-          ].map((kpi,i) => (
-            <div key={i} style={{ flex: 1, background: kpi.bg, borderRadius: 8, padding: "13px 16px", borderTop: `3px solid ${kpi.color}` }}>
-              <div style={{ fontSize: 8, color: "#6b7280", marginBottom: 5 }}>{kpi.label}</div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: kpi.color }}>{kpi.value}</div>
-              <div style={{ fontSize: 8, color: "#6b7280", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{kpi.sub}</div>
+      <div style={{ padding: "22px 32px 28px" }}>
+        <div style={{ display: "flex", gap: 14, marginBottom: 22 }}>
+          <div style={{ flex: 1, background: C.bg, borderRadius: 10, padding: "16px 18px", border: "1px solid #fef08a" }}>
+            <div style={{ fontSize: 8, color: C.grayLight, marginBottom: 6 }}>📋 現在のフェーズ</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.gray }}>{d.phase||"—"}</div>
+            <div style={{ fontSize: 8, color: C.grayLight, marginTop: 4 }}>{phaseSub}</div>
+          </div>
+          <div style={{ flex: 1, background: "#f5f5f4", borderRadius: 10, padding: "16px 18px", border: "1px solid #e7e5e4" }}>
+            <div style={{ fontSize: 8, color: C.grayLight, marginBottom: 6 }}>📦 成果物</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.gray }}>{delivCount?`${delivCount}件`:"—"}</div>
+            <div style={{ fontSize: 8, color: C.grayLight, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.deliverables||""}</div>
+          </div>
+        </div>
+        {hasPhotos && <div style={{ display: "flex", gap: 14, marginBottom: 22 }}>
+          {[d.photo1, d.photo2].filter(Boolean).map((src,i) => (
+            <div key={i} style={{ flex: 1, borderRadius: 10, overflow: "hidden", border: "1px solid #e7e5e4", background: "#f5f5f4" }}>
+              <img src={src} alt="" style={{ width: "100%", aspectRatio: "4/3", objectFit: "contain", display: "block" }} />
             </div>
           ))}
-        </div>
-        {hasPhotos && (
-          <div style={{ display: "flex", gap: 12, marginBottom: 18 }}>
-            {[d.photo1, d.photo2].filter(Boolean).map((src,i) => (
-              <div key={i} style={{ flex: 1, borderRadius: 8, overflow: "hidden", border: "1px solid #e2e8f0" }}>
-                <img src={src} alt="" style={{ width: "100%", height: 140, objectFit: "cover", display: "block" }} />
-              </div>
-            ))}
-          </div>
-        )}
-        {d.summary && <div style={{ marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}><div style={{ width: 3, height: 15, background: "#2563eb", borderRadius: 2 }}/><div style={{ fontSize: 12, fontWeight: 600, color: "#1e293b" }}>今月の活動サマリー</div></div>
-          <div style={{ fontSize: 11, lineHeight: 1.9, color: "#374151" }}>{d.summary}</div>
         </div>}
-        {d.teacherComment && <div style={{ marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}><div style={{ width: 3, height: 15, background: "#2563eb", borderRadius: 2 }}/><div style={{ fontSize: 12, fontWeight: 600, color: "#1e293b" }}>先生の声</div></div>
-          <div style={{ background: "#f0f9ff", borderRadius: 8, padding: "12px 16px", fontSize: 11, color: "#1e40af", fontStyle: "italic", lineHeight: 1.8 }}>「{d.teacherComment}」</div>
+        {d.summary && <div style={{ marginBottom: 20 }}>
+          <SectionHead label="活動サマリー" />
+          <div style={{ fontSize: 11, lineHeight: 2.0, color: "#44403c", padding: "0 4px" }}>{d.summary}</div>
         </div>}
-        {d.nextMonth && <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "13px 16px", marginBottom: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "#92400e", marginBottom: 5 }}>📅 来月の予定</div>
-          <div style={{ fontSize: 11, color: "#78350f", lineHeight: 1.7 }}>{d.nextMonth}</div>
+        {d.teacherComment && <div style={{ marginBottom: 20 }}>
+          <SectionHead label="先生の声" />
+          <div style={{ background: C.bg, borderRadius: 10, padding: "14px 18px", fontSize: 11, color: "#713f12", fontStyle: "italic", lineHeight: 1.9, border: "1px solid #fef08a" }}>「{d.teacherComment}」</div>
         </div>}
-        {d.notes && <div style={{ marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}><div style={{ width: 3, height: 15, background: "#2563eb", borderRadius: 2 }}/><div style={{ fontSize: 12, fontWeight: 600, color: "#1e293b" }}>備考</div></div>
-          <div style={{ fontSize: 11, color: "#374151", lineHeight: 1.8 }}>{d.notes}</div>
+        {d.nextMonth && <div style={{ marginBottom: 20 }}>
+          <SectionHead label="来月の予定" />
+          <div style={{ background: "#f5f5f4", borderRadius: 10, padding: "14px 18px", fontSize: 11, color: "#44403c", lineHeight: 1.8, border: "1px solid #e7e5e4" }}>{d.nextMonth}</div>
         </div>}
-        {d.activities.length > 0 && <div style={{ marginTop: 8, paddingTop: 12, borderTop: "1px solid #e2e8f0" }}>
-          <div style={{ fontSize: 8, color: "#94a3b8", marginBottom: 4 }}>実施業務</div>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{d.activities.map((a,i) => <span key={i} style={{ fontSize: 9, background: "#eff6ff", color: "#1e40af", padding: "2px 8px", borderRadius: 4 }}>{a}</span>)}</div>
+        {d.notes && <div style={{ marginBottom: 20 }}>
+          <SectionHead label="備考" />
+          <div style={{ fontSize: 11, color: "#44403c", lineHeight: 1.9, padding: "0 4px" }}>{d.notes}</div>
+        </div>}
+        {d.activities.length > 0 && <div style={{ paddingTop: 14, borderTop: "1px solid #e7e5e4" }}>
+          <div style={{ fontSize: 8, color: "#a8a29e", marginBottom: 6 }}>実施業務</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{d.activities.map((a,i) => <span key={i} style={{ fontSize: 9, background: C.bg, color: "#713f12", padding: "3px 10px", borderRadius: 20, border: "1px solid #fef08a" }}>{a}</span>)}</div>
         </div>}
       </div>
-      <div style={{ padding: "10px 32px", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", fontSize: 8, color: "#94a3b8" }}>
-        <span>MIETA Monthly Report</span><span>1 / 1</span>
+      <div style={{ padding: "10px 32px", borderTop: "1px solid #e7e5e4", display: "flex", justifyContent: "space-between", fontSize: 8, color: "#a8a29e" }}>
+        <span>© MIETA Inc.</span><span>Monthly Report ・ 1/1</span>
       </div>
     </div>
   );
@@ -199,14 +226,39 @@ const ReportPage = ({ d }) => {
 function App() {
   const [data, setData] = useState({
     school: "", month: "", cdn: [], phase: "",
-    mtgHours: "", workHours: "", travelHours: "",
     activities: [], deliverables: "", summary: "",
     teacherComment: "", nextMonth: "", notes: "",
     photo1: null, photo2: null,
   });
   const [tab, setTab] = useState("edit");
   const [generating, setGenerating] = useState(false);
-  const [exportMode, setExportMode] = useState("png"); // "png" or "pdf"
+  const [exportMode, setExportMode] = useState("png");
+  const [notionLoading, setNotionLoading] = useState(false);
+  const [notionLoaded, setNotionLoaded] = useState(false);
+  const [notionError, setNotionError] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const pageId = params.get("pageId");
+    if (!pageId) return;
+    setNotionLoading(true);
+    fetch(`/api/notion?pageId=${pageId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) { setNotionError(d.error); return; }
+        setData(prev => ({
+          ...prev,
+          school: d.school || "", month: d.month || "", cdn: d.cdn || [],
+          phase: d.phase || "", activities: d.activities || [],
+          deliverables: d.deliverables || "", summary: d.summary || "",
+          teacherComment: d.teacherComment || "", nextMonth: d.nextMonth || "",
+          notes: d.notes || "",
+        }));
+        setNotionLoaded(true);
+      })
+      .catch(e => setNotionError(e.message))
+      .finally(() => setNotionLoading(false));
+  }, []);
 
   const upd = (key) => (e) => setData(prev => ({ ...prev, [key]: e.target.value }));
   const toggleAct = (act) => setData(prev => ({ ...prev, activities: prev.activities.includes(act) ? prev.activities.filter(a => a !== act) : [...prev.activities, act] }));
@@ -217,31 +269,24 @@ function App() {
   const generatePDF = async () => {
     setGenerating(true);
     try {
-      // Create offscreen container with fixed 794px width
       const wrapper = document.createElement("div");
       wrapper.style.cssText = "position:fixed;left:-9999px;top:0;width:794px;z-index:-1;";
       wrapper.innerHTML = renderReportHTML(data);
       document.body.appendChild(wrapper);
-
-      // Wait for images to load
       const imgs = wrapper.querySelectorAll("img");
       if (imgs.length > 0) {
-        await Promise.all(Array.from(imgs).map(img => 
+        await Promise.all(Array.from(imgs).map(img =>
           img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; img.onerror = r; })
         ));
       }
       await new Promise(r => setTimeout(r, 300));
-
       const target = wrapper.firstChild;
       const canvas = await html2canvas(target, { scale: 2, useCORS: true, backgroundColor: "#ffffff", width: 794 });
-
       document.body.removeChild(wrapper);
-
       const imgData = canvas.toDataURL("image/png");
       const imgW = 210;
       const imgH = (canvas.height * imgW) / canvas.width;
       const fname = `月次報告書_${data.school||"学校名"}_${data.month||"月"}`;
-      
       if (exportMode === "png") {
         const link = document.createElement("a");
         link.download = fname + ".png";
@@ -250,11 +295,7 @@ function App() {
       } else {
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-        if (imgH > 297) {
-          pdf.addImage(imgData, "PNG", 0, 0, imgW, 297);
-        } else {
-          pdf.addImage(imgData, "PNG", 0, 0, imgW, imgH);
-        }
+        pdf.addImage(imgData, "PNG", 0, 0, imgW, imgH > 297 ? 297 : imgH);
         pdf.save(fname + ".pdf");
       }
     } catch (err) {
@@ -263,92 +304,98 @@ function App() {
     setGenerating(false);
   };
 
+  /* Section heading for form */
+  const FormSection = ({label}) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, paddingTop: 4 }}>
+      <div style={{ background: C.gold, borderRadius: 10, padding: "3px 12px", fontSize: 10, fontWeight: 600, color: "white" }}>{label}</div>
+      <div style={{ flex: 1, height: 1, background: "#e7e5e4" }}/>
+    </div>
+  );
+
   return (
-    <div style={{ minHeight: "100vh", background: "#f1f5f9", fontFamily: "'Noto Sans JP', sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: "#fafaf9", fontFamily: "'Noto Sans JP', sans-serif" }}>
       {/* Top bar */}
-      <div className="no-print" style={{ background: "#1e293b", padding: "10px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>📄 月次報告書ジェネレーター</div>
+      <div className="no-print" style={{ background: "white", padding: "12px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 100, borderBottom: `3px solid ${C.gold}`, boxShadow: "0 1px 6px rgba(0,0,0,0.04)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <svg width="28" height="28" viewBox="0 0 48 48"><circle cx="16" cy="16" r="10.5" fill="none" stroke="#595757" strokeWidth="3"/><circle cx="32" cy="16" r="8.5" fill="#fec100"/></svg>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.gray }}>月次報告書ジェネレーター</div>
+        </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <div style={{ display: "flex", background: "rgba(255,255,255,0.1)", borderRadius: 6, overflow: "hidden" }}>
-            <button onClick={() => setTab("edit")} style={{ padding: "6px 16px", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 500, background: tab === "edit" ? "#2563eb" : "transparent", color: "white" }}>✏️ 入力</button>
-            <button onClick={() => setTab("preview")} style={{ padding: "6px 16px", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 500, background: tab === "preview" ? "#2563eb" : "transparent", color: "white" }}>👁 プレビュー</button>
+          <div style={{ display: "flex", background: "#f5f5f4", borderRadius: 8, overflow: "hidden" }}>
+            <button onClick={() => setTab("edit")} style={{ padding: "7px 16px", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, borderRadius: 8, background: tab === "edit" ? C.gold : "transparent", color: tab === "edit" ? "white" : "#78716c" }}>✏️ 入力</button>
+            <button onClick={() => setTab("preview")} style={{ padding: "7px 16px", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, borderRadius: 8, background: tab === "preview" ? C.gold : "transparent", color: tab === "preview" ? "white" : "#78716c" }}>👁 プレビュー</button>
           </div>
-          <button onClick={generatePDF} disabled={generating} style={{ padding: "6px 16px", background: generating ? "#6b7280" : "#059669", color: "white", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: generating ? "wait" : "pointer" }}>
+          <button onClick={generatePDF} disabled={generating} style={{ padding: "7px 18px", background: generating ? "#d6d3d1" : C.gray, color: "white", border: "none", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: generating ? "wait" : "pointer" }}>
             {generating ? "⏳ 生成中..." : `📥 ${exportMode.toUpperCase()}出力`}
           </button>
-          <div style={{ display: "flex", background: "rgba(255,255,255,0.1)", borderRadius: 6, overflow: "hidden" }}>
-            <button onClick={() => setExportMode("png")} style={{ padding: "6px 10px", border: "none", cursor: "pointer", fontSize: 10, background: exportMode === "png" ? "#059669" : "transparent", color: "white" }}>PNG</button>
-            <button onClick={() => setExportMode("pdf")} style={{ padding: "6px 10px", border: "none", cursor: "pointer", fontSize: 10, background: exportMode === "pdf" ? "#059669" : "transparent", color: "white" }}>PDF</button>
+          <div style={{ display: "flex", background: "#f5f5f4", borderRadius: 8, overflow: "hidden" }}>
+            <button onClick={() => setExportMode("png")} style={{ padding: "7px 10px", border: "none", cursor: "pointer", fontSize: 10, borderRadius: 8, background: exportMode === "png" ? C.gold : "transparent", color: exportMode === "png" ? "white" : "#78716c", fontWeight: 600 }}>PNG</button>
+            <button onClick={() => setExportMode("pdf")} style={{ padding: "7px 10px", border: "none", cursor: "pointer", fontSize: 10, borderRadius: 8, background: exportMode === "pdf" ? C.gold : "transparent", color: exportMode === "pdf" ? "white" : "#78716c", fontWeight: 600 }}>PDF</button>
           </div>
         </div>
       </div>
 
       <div className="app-container" style={{ maxWidth: 700, margin: "0 auto", padding: 16 }}>
-        {/* Edit tab */}
+        {notionLoading && <div style={{ background: C.bg, borderRadius: 10, padding: "12px 16px", marginBottom: 12, fontSize: 12, color: "#713f12", border: "1px solid #fef08a" }}>⏳ Notionからデータを取得中...</div>}
+        {notionLoaded && <div style={{ background: "#f0fdf4", borderRadius: 10, padding: "12px 16px", marginBottom: 12, fontSize: 12, color: "#166534", border: "1px solid #bbf7d0" }}>✅ Notionからデータを取得しました。内容を確認して出力してください。</div>}
+        {notionError && <div style={{ background: "#fef2f2", borderRadius: 10, padding: "12px 16px", marginBottom: 12, fontSize: 12, color: "#991b1b", border: "1px solid #fecaca" }}>❌ 取得エラー: {notionError}</div>}
+
         {tab === "edit" && (
-          <div className="no-print" style={{ background: "white", borderRadius: 10, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", marginBottom: 10, paddingBottom: 8, borderBottom: "1px solid #e2e8f0" }}>基本情報</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+          <div className="no-print" style={{ background: "white", borderRadius: 14, padding: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.04)" }}>
+            <FormSection label="基本情報" />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
               <div><label style={LB}>学校名（顧客名）</label><input style={IS} value={data.school} onChange={upd("school")} placeholder="例：麗澤瑞浪" /></div>
-              <div><label style={LB}>対象月</label><select style={SS} value={data.month} onChange={upd("month")}><option value="">選択してください</option>{monthOptions.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
+              <div><label style={LB}>対象月</label><input style={IS} value={data.month} onChange={upd("month")} placeholder="例：2月度" /></div>
             </div>
-            <div style={{ marginBottom: 10 }}>
+            <div style={{ marginBottom: 12 }}>
               <label style={LB}>CDN担当（複数選択可）</label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {cdnMembers.map(name => <button key={name} onClick={() => toggleCdn(name)} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer", border: "1px solid", borderColor: data.cdn.includes(name) ? "#059669" : "#d1d5db", background: data.cdn.includes(name) ? "#ecfdf5" : "white", color: data.cdn.includes(name) ? "#065f46" : "#6b7280", fontFamily: "inherit" }}>{data.cdn.includes(name) ? "✅ " : ""}{name}</button>)}
+                {cdnMembers.map(name => <button key={name} onClick={() => toggleCdn(name)} style={{ padding: "7px 14px", borderRadius: 20, fontSize: 12, cursor: "pointer", border: "1.5px solid", borderColor: data.cdn.includes(name) ? C.gold : "#e7e5e4", background: data.cdn.includes(name) ? C.bg : "white", color: data.cdn.includes(name) ? "#713f12" : "#78716c", fontFamily: "inherit", fontWeight: data.cdn.includes(name) ? 600 : 400, transition: "all 0.15s" }}>{data.cdn.includes(name) ? "✅ " : ""}{name}</button>)}
               </div>
             </div>
-            <div style={{ marginBottom: 16 }}><label style={LB}>フェーズ</label><select style={SS} value={data.phase} onChange={upd("phase")}><option value="">選択してください</option>{phaseOptions.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
+            <div style={{ marginBottom: 20 }}><label style={LB}>フェーズ</label><select style={SS} value={data.phase} onChange={upd("phase")}><option value="">選択してください</option>{phaseOptions.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
 
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", marginBottom: 10, paddingBottom: 8, borderBottom: "1px solid #e2e8f0" }}>稼働時間</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
-              <div><label style={LB}>MTG (h)</label><input style={IS} type="number" value={data.mtgHours} onChange={upd("mtgHours")} placeholder="0" /></div>
-              <div><label style={LB}>作業 (h)</label><input style={IS} type="number" value={data.workHours} onChange={upd("workHours")} placeholder="0" /></div>
-              <div><label style={LB}>移動 (h)</label><input style={IS} type="number" value={data.travelHours} onChange={upd("travelHours")} placeholder="0" /></div>
+            <FormSection label="実施業務" />
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 20 }}>
+              {activityOptions.map(act => <button key={act} onClick={() => toggleAct(act)} style={{ padding: "7px 14px", borderRadius: 20, fontSize: 12, cursor: "pointer", border: "1.5px solid", borderColor: data.activities.includes(act) ? C.gold : "#e7e5e4", background: data.activities.includes(act) ? C.bg : "white", color: data.activities.includes(act) ? "#713f12" : "#78716c", fontFamily: "inherit", fontWeight: data.activities.includes(act) ? 600 : 400, transition: "all 0.15s" }}>{data.activities.includes(act) ? "✅ " : ""}{act}</button>)}
             </div>
 
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", marginBottom: 10, paddingBottom: 8, borderBottom: "1px solid #e2e8f0" }}>実施業務</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
-              {activityOptions.map(act => <button key={act} onClick={() => toggleAct(act)} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer", border: "1px solid", borderColor: data.activities.includes(act) ? "#2563eb" : "#d1d5db", background: data.activities.includes(act) ? "#eff6ff" : "white", color: data.activities.includes(act) ? "#1e40af" : "#6b7280", fontFamily: "inherit" }}>{data.activities.includes(act) ? "✅ " : ""}{act}</button>)}
-            </div>
-
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", marginBottom: 10, paddingBottom: 8, borderBottom: "1px solid #e2e8f0" }}>写真（任意）</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+            <FormSection label="写真（任意）" />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
               {[{key:"photo1",label:"活動写真①"},{key:"photo2",label:"活動写真②"}].map(p => (
                 <div key={p.key}><label style={LB}>{p.label}</label>
                   {data[p.key] ? (
-                    <div style={{ position: "relative", borderRadius: 6, overflow: "hidden", border: "1px solid #d1d5db" }}>
-                      <img src={data[p.key]} alt={p.label} style={{ width: "100%", height: 100, objectFit: "cover", display: "block" }} />
-                      <button onClick={() => removePhoto(p.key)} style={{ position: "absolute", top: 4, right: 4, width: 22, height: 22, borderRadius: "50%", background: "rgba(0,0,0,0.5)", color: "white", border: "none", cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                    <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: "1px solid #e7e5e4", background: "#f5f5f4" }}>
+                      <img src={data[p.key]} alt={p.label} style={{ width: "100%", aspectRatio: "4/3", objectFit: "contain", display: "block" }} />
+                      <button onClick={() => removePhoto(p.key)} style={{ position: "absolute", top: 4, right: 4, width: 24, height: 24, borderRadius: "50%", background: "rgba(0,0,0,0.45)", color: "white", border: "none", cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
                     </div>
                   ) : (
-                    <label style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 80, border: "2px dashed #d1d5db", borderRadius: 6, cursor: "pointer", color: "#94a3b8", fontSize: 11, background: "#f8fafc" }}>📷 クリックして選択<input type="file" accept="image/*" onChange={handlePhoto(p.key)} style={{ display: "none" }} /></label>
+                    <label style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 80, border: "2px dashed #d6d3d1", borderRadius: 10, cursor: "pointer", color: "#a8a29e", fontSize: 11, background: "#fafaf9" }}>📷 クリックして選択<input type="file" accept="image/*" onChange={handlePhoto(p.key)} style={{ display: "none" }} /></label>
                   )}
                 </div>
               ))}
             </div>
 
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", marginBottom: 10, paddingBottom: 8, borderBottom: "1px solid #e2e8f0" }}>レポート内容</div>
-            <div style={{ marginBottom: 10 }}><label style={LB}>成果物（任意）</label><input style={IS} value={data.deliverables} onChange={upd("deliverables")} placeholder="例：単元計画書 v1.0、ワークシート（読点区切り）" /></div>
-            <div style={{ marginBottom: 10 }}><label style={LB}>活動サマリー</label><textarea style={TS} rows={3} value={data.summary} onChange={upd("summary")} placeholder="今月の活動を3〜4文で記述..." /></div>
-            <div style={{ marginBottom: 10 }}><label style={LB}>先生のコメント（任意）</label><textarea style={TS} rows={2} value={data.teacherComment} onChange={upd("teacherComment")} placeholder="先生からのフィードバック..." /></div>
-            <div style={{ marginBottom: 10 }}><label style={LB}>来月の予定</label><textarea style={TS} rows={2} value={data.nextMonth} onChange={upd("nextMonth")} placeholder="来月の主な予定..." /></div>
-            <div style={{ marginBottom: 10 }}><label style={LB}>備考（任意）</label><textarea style={TS} rows={2} value={data.notes} onChange={upd("notes")} placeholder="その他メモ..." /></div>
+            <FormSection label="レポート内容" />
+            <div style={{ marginBottom: 12 }}><label style={LB}>成果物（任意）</label><input style={IS} value={data.deliverables} onChange={upd("deliverables")} placeholder="例：単元計画書 v1.0、ワークシート（読点区切り）" /></div>
+            <div style={{ marginBottom: 12 }}><label style={LB}>活動サマリー</label><textarea style={TS} rows={3} value={data.summary} onChange={upd("summary")} placeholder="今月の活動を3〜4文で記述..." /></div>
+            <div style={{ marginBottom: 12 }}><label style={LB}>先生のコメント（任意）</label><textarea style={TS} rows={2} value={data.teacherComment} onChange={upd("teacherComment")} placeholder="先生からのフィードバック..." /></div>
+            <div style={{ marginBottom: 12 }}><label style={LB}>来月の予定</label><textarea style={TS} rows={2} value={data.nextMonth} onChange={upd("nextMonth")} placeholder="来月の主な予定..." /></div>
+            <div style={{ marginBottom: 12 }}><label style={LB}>備考（任意）</label><textarea style={TS} rows={2} value={data.notes} onChange={upd("notes")} placeholder="その他メモ..." /></div>
 
-            <button onClick={() => setTab("preview")} style={{ width: "100%", padding: "12px", background: "#2563eb", color: "white", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", marginTop: 8, fontFamily: "inherit" }}>
+            <button onClick={() => setTab("preview")} style={{ width: "100%", padding: "13px", background: C.gold, color: "white", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", marginTop: 8, fontFamily: "inherit", boxShadow: "0 2px 8px rgba(254,193,0,0.3)" }}>
               👁 プレビューを確認する
             </button>
           </div>
         )}
 
-        {/* Preview tab */}
         {tab === "preview" && (
           <div>
-            <div className="no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <button onClick={() => setTab("edit")} style={{ padding: "6px 14px", background: "white", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "#374151", fontFamily: "inherit" }}>← 入力に戻る</button>
-              <div style={{ fontSize: 10, color: "#64748b" }}>💡 ⌘+P / Ctrl+P で報告書のみPDF保存もできます</div>
+            <div className="no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <button onClick={() => setTab("edit")} style={{ padding: "7px 16px", background: "white", border: "1px solid #e7e5e4", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "#57534e", fontFamily: "inherit" }}>← 入力に戻る</button>
+              <div style={{ fontSize: 10, color: "#a8a29e" }}>💡 ⌘+P / Ctrl+P で印刷もできます</div>
             </div>
-            <div className="report-wrap" style={{ borderRadius: 4 }}>
+            <div className="report-wrap">
               <ReportPage d={data} />
             </div>
           </div>
